@@ -1,9 +1,11 @@
-package ilpscheduler
+package sascheduling
 
 import (
 	"context"
+
 	"encoding/json"
 	"fmt"
+
 	"k8s.io/client-go/informers"
 	clientsetfake "k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/tools/cache"
@@ -14,7 +16,6 @@ import (
 	tf "k8s.io/kubernetes/pkg/scheduler/testing/framework"
 	testutil "sigs.k8s.io/scheduler-plugins/test/util"
 	"sort"
-	"sync"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
@@ -32,7 +33,6 @@ type TestParameters struct {
 	PodMemory      int64
 }
 
-// test cases
 var testCases = []TestParameters{
 	{
 		NumNodes:       9,
@@ -68,7 +68,7 @@ var testCases = []TestParameters{
 	},
 	{
 		NumNodes:       20,
-		NumRegions:     4,
+		NumRegions:     3,
 		NodesPerRegion: 5,
 		NumPods:        25,
 		PodCPU:         1000,
@@ -76,7 +76,7 @@ var testCases = []TestParameters{
 	},
 	{
 		NumNodes:       20,
-		NumRegions:     4,
+		NumRegions:     3,
 		NodesPerRegion: 5,
 		NumPods:        30,
 		PodCPU:         1000,
@@ -84,16 +84,16 @@ var testCases = []TestParameters{
 	},
 	{
 		NumNodes:       20,
-		NumRegions:     4,
+		NumRegions:     3,
 		NodesPerRegion: 5,
 		NumPods:        35,
 		PodCPU:         1000,
 		PodMemory:      1024,
 	},
 	{
-		NumNodes:       24,
-		NumRegions:     4,
-		NodesPerRegion: 6,
+		NumNodes:       20,
+		NumRegions:     3,
+		NodesPerRegion: 5,
 		NumPods:        40,
 		PodCPU:         1000,
 		PodMemory:      1024,
@@ -103,38 +103,30 @@ var testCases = []TestParameters{
 var RegionLatencyMap = map[string]map[string]float64{
 	"region1": {
 		"region1": 0.7, // intra-region latency
-		"region2": 20.0,
-		"region3": 35.0,
-		"region4": 45.0,
+		"region2": 3.0,
+		"region3": 5.0,
 	},
 	"region2": {
-		"region1": 20.0,
+		"region1": 3.0,
 		"region2": 0.7, // intra-region latency
-		"region3": 25.0,
-		"region4": 35.0,
+		"region3": 5.0,
 	},
 	"region3": {
-		"region1": 35.0,
-		"region2": 25.0,
+		"region1": 10,
+		"region2": 5,
 		"region3": 0.7, // intra-region latency
-		"region4": 20.0,
-	},
-	"region4": {
-		"region1": 45.0,
-		"region2": 35.0,
-		"region3": 20.0,
-		"region4": 0.7, // intra-region latency
+
 	},
 }
 
-func TestILPPluginWithParameters(t *testing.T) {
+func TestSAPluginWithParameters(t *testing.T) {
 
 	for _, params := range testCases {
 		t.Logf("Running test with parameters: Nodes=%d, Regions=%d, Pods=%d",
 			params.NumNodes, params.NumRegions, params.NumPods)
 		runTestCase(t, params)
-	}
 
+	}
 }
 
 func runTestCase(t *testing.T, params TestParameters) {
@@ -145,7 +137,7 @@ func runTestCase(t *testing.T, params TestParameters) {
 			fmt.Sprintf("region%d", r),
 			(r-1)*params.NodesPerRegion+1,
 			params.NodesPerRegion,
-			3000,
+			4000,
 			8192,
 		)
 		allNodes = append(allNodes, regionNodes...)
@@ -215,11 +207,10 @@ func runTestCase(t *testing.T, params TestParameters) {
 	}
 
 	createLatencyConfigMaps(client)
-	plugin := &ILPPlugin{
+	plugin := &SAPlugin{
 		handle:      mockHandle,
-		latencyMu:   sync.RWMutex{},
 		latencyData: make(map[string]map[string]float64),
-		podGroup:    make(map[string][]string),
+		groupPods:   make(map[string][]*v1.Pod),
 	}
 
 	state := framework.NewCycleState()
@@ -282,22 +273,6 @@ func runTestCase(t *testing.T, params TestParameters) {
 	}
 
 	fmt.Printf("nodeScores: %v\n", nodeScores)
-	for i := 0; i < len(pods); i++ {
-		for j := i + 1; j < len(pods); j++ {
-			pod1 := pods[i]
-			pod2 := pods[j]
-
-			node1 := allNodes[getNodeIndex(allNodes, pod1.Spec.NodeName)]
-			node2 := allNodes[getNodeIndex(allNodes, pod2.Spec.NodeName)]
-
-			if node1 != nil && node2 != nil {
-				latency := getNodeLatency(node1, node2)
-				allLatencies = append(allLatencies, latency)
-				totalLatency += latency
-				pairCount++
-			}
-		}
-	}
 
 	for i := 0; i < len(pods); i++ {
 		for j := i + 1; j < len(pods); j++ {
@@ -334,6 +309,7 @@ func runTestCase(t *testing.T, params TestParameters) {
 	return
 }
 
+// createNodesInRegion creates a specified number of nodes in a given region
 func createNodesInRegion(region string, startIndex, count int, cpu int64, memory int64) []*v1.Node {
 	nodes := make([]*v1.Node, count)
 	for i := 0; i < count; i++ {
@@ -355,12 +331,14 @@ func getNodeIndex(nodes []*v1.Node, nodeName string) int {
 	return -1
 }
 
+// getNodeLatency returns the latency between two nodes based on their regions
 func getNodeLatency(sourceNode, targetNode *v1.Node) float64 {
 	sourceRegion := sourceNode.Labels["region"]
 	targetRegion := targetNode.Labels["region"]
 	return RegionLatencyMap[sourceRegion][targetRegion]
 }
 
+// createLatencyConfigMaps generates ConfigMaps with latency data based on node regions
 func createLatencyConfigMaps(client *clientsetfake.Clientset) {
 
 	nodes, _ := client.CoreV1().Nodes().List(context.TODO(), metav1.ListOptions{})
@@ -377,9 +355,11 @@ func createLatencyConfigMaps(client *clientsetfake.Clientset) {
 			}
 		}
 
+		// Convert latency map to JSON
 		jsonData, _ := json.Marshal(latencies)
 		latencyData[sourceNode.Name+"-latency"] = string(jsonData)
 
+		// Create ConfigMap
 		cm := &v1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      sourceNode.Name + "-latency",
@@ -448,7 +428,7 @@ func (f fakeNodeInfoLister) Get(nodeName string) (*framework.NodeInfo, error) {
 
 func mockNode(name string, cpu int64, memory int64, region string) *v1.Node {
 	return &v1.Node{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{"topology.kubernetes.io/region": region}},
 		Spec: v1.NodeSpec{
 			PodCIDR:       "",
 			PodCIDRs:      nil,
