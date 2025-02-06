@@ -13,6 +13,7 @@ require (
 	github.com/k8stopologyawareschedwg/podfingerprint v0.2.2
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/paypal/load-watcher v0.2.4
+	github.com/smartystreets/goconvey v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
 	gonum.org/v1/gonum v0.12.0
@@ -68,6 +69,7 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
+	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
@@ -75,6 +77,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/jpillora/backoff v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/moby/sys/mountinfo v0.7.1 // indirect
 	github.com/moby/term v0.5.0 // indirect
@@ -94,6 +97,7 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/seccomp/libseccomp-golang v0.10.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/smarty/assertions v1.15.0 // indirect
 	github.com/spf13/cobra v1.8.1 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
